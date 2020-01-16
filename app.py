@@ -6,7 +6,7 @@ import gunicorn
 app = Flask(__name__)
 #port = int(os.getenv('VCAP_APP_PORT', 5000))
 
-
+dataset=json.load(open('dataset.json'))
 
 
 @app.route('/')
@@ -21,7 +21,7 @@ def jsonDatatree():
 
 @app.route('/dataframe')
 def getDataframe():
-    dataset=json.load(open('dataset.json'))
+    
     s_ID=request.args.get('id')
     return json.dumps(dataset[s_ID])
 

@@ -26,9 +26,14 @@
             /*   stroke-width: 2px; */
         }
 
-        .line {
+        .lineV {
             fill: none;
-            stroke: #ffab00;
+            stroke: #00ccff;
+            stroke-width: 3;
+        }
+        .lineI {
+            fill: none;
+            stroke: #ff0055;
             stroke-width: 3;
         }
 
@@ -340,7 +345,7 @@
                     // 9. Append the path, bind the data, and call the line generator 
                     svg2.append("path")
                         .datum(dataset) // 10. Binds data to the line 
-                        .attr("class", "line") // Assign a class for styling 
+                        .attr("class", "lineV") // Assign a class for styling 
                         .attr("d", line); // 11. Calls the line generator 
 
                     // 12. Appends a circle for each datapoint 
@@ -420,7 +425,7 @@
                     // 9. Append the path, bind the data, and call the line generator 
                     svg3.append("path")
                         .datum(dataset) // 10. Binds data to the line 
-                        .attr("class", "line") // Assign a class for styling 
+                        .attr("class", "lineI") // Assign a class for styling 
                         .attr("d", line); // 11. Calls the line generator 
 
                     // 12. Appends a circle for each datapoint 
