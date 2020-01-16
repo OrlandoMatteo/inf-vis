@@ -1,0 +1,470 @@
+<html>
+
+<head>
+    <title>Real-time Dashboard</title>
+    <meta charset="utf8">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.0/jquery.js"></script>
+    <script src="{{url_for('static', filename='script.js')}}"></script>
+
+
+    <style>
+        .node circle {
+            fill: #fff;
+            /*   stroke: steelblue; */
+            stroke-width: 3px;
+        }
+
+        .node text {
+            font: 12px sans-serif;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            /*   stroke-width: 2px; */
+        }
+
+        .line {
+            fill: none;
+            stroke: #ffab00;
+            stroke-width: 3;
+        }
+
+        .dot {
+            fill: #ffab00;
+            stroke: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" style="max-width: 100%;">
+        <div class="row h-50">
+            <div class="col-md-5" id="network">
+
+            </div>
+            <div class="col-md-7" id="voltage">
+                <h2 id="busSelected">Bus selected: </h2>
+            </div>
+        </div>
+        <div class="row h-50">
+            <div class="col-md-5" id="">
+
+            </div>
+            <div class="col-md-7" id="current">
+                <h2 id="busSelected">Bus selected: </h2>
+            </div>
+        </div>
+    </div>
+
+
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script>
+            var nodeForChart = ""
+            // Set the dimensions and margins of the diagram
+            var margin = { top: 20, right: 90, bottom: 30, left: 90 },
+                width = 960 - margin.left - margin.right,
+                height = 500 - margin.top - margin.bottom;
+
+            var colorScale = d3.scaleLinear()
+                .domain([0, 1])
+                .range(['red', 'green']);
+            var widthScale = d3.scaleLinear()
+                .domain([1, 80])
+                .range([1, 10]);
+
+            // append the svg object to the body of the page
+            // appends a 'group' element to 'svg'
+            // moves the 'group' element to the top left margin
+            var svg = d3.select("#network").append("svg")
+                .attr("width", width + margin.right + margin.left)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", "translate("
+                    + margin.left + "," + margin.top + ")");
+
+            var i = 0,
+                duration = 750,
+                root;
+
+            // declares a tree layout and assigns the size
+            var treemap = d3.tree().size([height, width]);
+            d3.json("/jsonDatatree", function (error, treeData) {
+
+
+                // Assigns parent, children, height, depth
+                root = d3.hierarchy(treeData, function (d) { return d.children; });
+                root.x0 = height / 2;
+                root.y0 = 0;
+
+                // Collapse after the second level
+                root.children.forEach(collapse);
+
+                update(root);
+            });
+
+            // Collapse the node and all it's children
+            function collapse(d) {
+                if (d.children) {
+                    d._children = d.children
+                    d._children.forEach(collapse)
+                    d.children = null
+                }
+            }
+
+            function update(source) {
+
+                // Assigns the x and y position for the nodes
+                var treeData = treemap(root);
+
+                // Compute the new tree layout.
+                var nodes = treeData.descendants(),
+                    links = treeData.descendants().slice(1);
+
+                // Normalize for fixed-depth.
+                nodes.forEach(function (d) { d.y = d.depth * 180 });
+
+                // ****************** Nodes section ***************************
+
+                // Update the nodes...
+                var node = svg.selectAll('g.node')
+                    .data(nodes, function (d) { return d.id || (d.id = ++i); });
+
+                // Enter any new modes at the parent's previous position.
+                var nodeEnter = node.enter().append('g')
+                    .attr('class', 'node')
+                    .attr("transform", function (d) {
+                        return "translate(" + source.y0 + "," + source.x0 + ")";
+                    })
+                    .on('click', click);
+
+                // Add Circle for the nodes
+                nodeEnter.append('circle')
+                    .attr('class', 'node')
+                    .attr('r', 1e-6)
+                    .style("fill", function (d) {
+                        return d._children ? "lightsteelblue" : "#fff";
+                    })
+                    .style("stroke", function (d) { return colorScale(d.data.female / (d.data.female + d.data.male)) });
+
+                // Add labels for the nodes
+                nodeEnter.append('text')
+                    .attr("dy", ".35em")
+                    .attr("x", function (d) {
+                        return d.children || d._children ? -13 : 13;
+                    })
+                    .attr("text-anchor", function (d) {
+                        return d.children || d._children ? "end" : "start";
+                    })
+                    .text(function (d) { return d.data.name; })
+                    .style("fill", function (d) { return colorScale(d.data.female / (d.data.value)) });
+
+                // UPDATE
+                var nodeUpdate = nodeEnter.merge(node);
+
+                // Transition to the proper position for the node
+                nodeUpdate.transition()
+                    .duration(duration)
+                    .attr("transform", function (d) {
+                        return "translate(" + d.y + "," + d.x + ")";
+                    });
+
+                // Update the node attributes and style
+                nodeUpdate.select('circle.node')
+                    .attr('r', 10)
+                    .style("fill", function (d) {
+                        return d._children ? "lightsteelblue" : "#fff";
+                    })
+                    .attr('cursor', 'pointer');
+
+
+                // Remove any exiting nodes
+                var nodeExit = node.exit().transition()
+                    .duration(duration)
+                    .attr("transform", function (d) {
+                        return "translate(" + source.y + "," + source.x + ")";
+                    })
+                    .remove();
+
+                // On exit reduce the node circles size to 0
+                nodeExit.select('circle')
+                    .attr('r', 1e-6);
+
+                // On exit reduce the opacity of text labels
+                nodeExit.select('text')
+                    .style('fill-opacity', 1e-6);
+
+                // ****************** links section ***************************
+
+                // Update the links...
+                var link = svg.selectAll('path.link')
+                    .data(links, function (d) { return d.id; })
+                    .style('stroke-width', function (d) {
+                        return widthScale(d.data.value)
+                    });
+
+                // Enter any new links at the parent's previous position.
+                var linkEnter = link.enter().insert('path', "g")
+                    .attr("class", "link")
+                    .attr('d', function (d) {
+                        var o = { x: source.x0, y: source.y0 }
+                        return diagonal(o, o)
+                    })
+                    .style('stroke-width', function (d) {
+                        return widthScale(d.data.value)
+                    });
+
+                // UPDATE
+                var linkUpdate = linkEnter.merge(link);
+
+                // Transition back to the parent element position
+                linkUpdate.transition()
+                    .duration(duration)
+                    .attr('d', function (d) { return diagonal(d, d.parent) });
+
+                // Remove any exiting links
+                var linkExit = link.exit().transition()
+                    .duration(duration)
+                    .attr('d', function (d) {
+                        var o = { x: source.x, y: source.y }
+                        return diagonal(o, o)
+                    })
+                    .style('stroke-width', function (d) {
+                        return widthScale(d.data.value)
+                    })
+                    .remove();
+
+                // Store the old positions for transition.
+                nodes.forEach(function (d) {
+                    d.x0 = d.x;
+                    d.y0 = d.y;
+                });
+
+                // Creates a curved (diagonal) path from parent to the child nodes
+                function diagonal(s, d) {
+
+                    path = `M ${s.y} ${s.x}
+              C ${(s.y + d.y) / 2} ${s.x},
+                ${(s.y + d.y) / 2} ${d.x},
+                ${d.y} ${d.x}`
+
+                    return path
+                }
+
+                // Toggle children on click.
+                function click(d) {
+
+                    if (d.data.children.length == 0) {
+                        nodeForChart = d.data.name;
+
+                        refreshDiv();
+                        $("#busSelected").html("Bus selected: " + nodeForChart);
+                        updateGraph();
+                    }
+                    if (d.children) {
+                        d._children = d.children;
+                        d.children = null;
+                    } else {
+                        d.children = d._children;
+                        d._children = null;
+                    }
+                    update(d);
+                }
+            }
+
+
+        </script>
+        <script>
+            function refreshDiv() {
+                $("#voltage").html('<h2 id="busSelected">Bus selected: </h2>')
+            }
+        </script>
+        <script>
+            // 2. Use the margin convention practice 
+            /*var margin = {top: 50, right: 50, bottom: 50, left: 50}
+            , width = window.innerWidth - margin.left - margin.right // Use the window's width 
+             , height = window.innerHeight - margin.top - margin.bottom; // Use the window's height
+            */
+            function updateGraph() {
+                d3.json('/dataframe?id=' + nodeForChart, function (error, dataset) {
+                    var margin = { top: 20, right: 90, bottom: 60, left: 150 },
+                        width = 960 - margin.left - margin.right,
+                        height = window.height - margin.top - margin.bottom;
+                    // The number of datapoints
+                    var n = 1440;
+
+                    // 5. X scale will use the index of our data
+                    var date = new Date('January 31, 2020 00:00:00')
+                    var date2= new Date('January 31, 2020 23:59:00')
+                    var xScale = d3.scaleTime()
+                        .domain([date,date2 ]) // input
+                        .range([0, width]); // output
+
+                    // 6. Y scale will use the randomly generate number 
+                    var yScale = d3.scaleLinear()
+                        .domain([180, 240]) // input 
+                        .range([height, 0]); // output 
+
+                    // 7. d3's line generator
+                    var line = d3.line()
+                        .x(function (d, i) { return xScale(convertIndex(i)); }) // set the x values for the line generator
+                        .y(function (d) { return yScale(d.V); }) // set the y values for the line generator 
+                        .curve(d3.curveMonotoneX) // apply smoothing to the line
+
+                    // 8. An array of objects of length N. Each object has key -> value pair, the key being "y" and the value is a random number
+                    //var dataset = d3.range(n).map(function(d) { return {"y": d3.randomUniform(1)() } })
+
+
+                    // 1. Add the SVG to the page and employ #2
+                    var svg2 = d3.select("#voltage").append("svg")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom)
+                        .append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+
+                    // 3. Call the x axis in a group tag
+                    svg2.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(d3.axisBottom(xScale).ticks(d3.timeHour.every(2))); // Create an axis component with d3.axisBottom
+
+                    // 4. Call the y axis in a group tag
+                    svg2.append("g")
+                        .attr("class", "y axis")
+                        .call(d3.axisLeft(yScale)); // Create an axis component with d3.axisLeft
+
+                    // 9. Append the path, bind the data, and call the line generator 
+                    svg2.append("path")
+                        .datum(dataset) // 10. Binds data to the line 
+                        .attr("class", "line") // Assign a class for styling 
+                        .attr("d", line); // 11. Calls the line generator 
+
+                    // 12. Appends a circle for each datapoint 
+                    svg2.selectAll(".dot")
+                        .data(dataset)
+                        .enter().append("circle") // Uses the enter().append() method
+                        .attr("class", "dot") // Assign a class for styling
+                        .attr("cx", function (d, i) { return xScale(convertIndex(i)) })
+                        .attr("cy", function (d) { return yScale(d.V) })
+                        .attr("r", 0);
+
+                    svg2.append("text")
+                        .attr("transform",
+                            "translate(" + (width / 2) + " ," +
+                            (height + margin.top + 20) + ")")
+                        .text("Time");
+
+
+
+                    svg2.append("text")
+                        .attr("text-anchor", "start")
+                        .attr("x", -height / 2)
+                        .attr("dy", "-6em")
+                        .attr("font-size", "100%")
+                        .attr("transform", "rotate(-90)")
+                        .text("Voltage (kV)");
+
+
+
+                    //CURRENT
+                    var margin = { top: 20, right: 90, bottom: 60, left: 150 },
+                        width = 960 - margin.left - margin.right,
+                        height = 400 - margin.top - margin.bottom;
+                    // The number of datapoints
+                    var n = 1440;
+                    var date = new Date('January 31, 2020 00:00:00')
+                    var date2= new Date('January 31, 2020 23:59:00')
+                    var xScale = d3.scaleTime()
+                        .domain([date,date2 ]) // input
+                        .range([0, width]); // output
+
+                    // 6. Y scale will use the randomly generate number 
+                    var yScale = d3.scaleLinear()
+                        .domain([0, 10]) // input 
+                        .range([height, 0]); // output 
+
+                    // 7. d3's line generator
+                    var line = d3.line()
+                        .x(function (d, i) { return xScale(convertIndex(i)); }) // set the x values for the line generator
+                        .y(function (d) { return yScale(d.I); }) // set the y values for the line generator 
+                        .curve(d3.curveMonotoneX) // apply smoothing to the line
+
+                    // 8. An array of objects of length N. Each object has key -> value pair, the key being "y" and the value is a random number
+                    //var dataset = d3.range(n).map(function(d) { return {"y": d3.randomUniform(1)() } })
+
+
+                    // 1. Add the SVG to the page and employ #2
+                    var svg3 = d3.select("#current").append("svg")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom)
+                        .append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+
+                    // 3. Call the x axis in a group tag
+                    svg3.append("g")
+                        .attr("class", "x axis")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(d3.axisBottom(xScale).ticks(d3.timeHour.every(2))); // Create an axis component with d3.axisBottom
+
+                    // 4. Call the y axis in a group tag
+                    svg3.append("g")
+                        .attr("class", "y axis")
+                        .call(d3.axisLeft(yScale)); // Create an axis component with d3.axisLeft
+
+                    // 9. Append the path, bind the data, and call the line generator 
+                    svg3.append("path")
+                        .datum(dataset) // 10. Binds data to the line 
+                        .attr("class", "line") // Assign a class for styling 
+                        .attr("d", line); // 11. Calls the line generator 
+
+                    // 12. Appends a circle for each datapoint 
+                    svg3.selectAll(".dot")
+                        .data(dataset)
+                        .enter().append("circle") // Uses the enter().append() method
+                        .attr("class", "dot") // Assign a class for styling
+                        .attr("cx", function (d, i) { return xScale(convertIndex(i)) })
+                        .attr("cy", function (d) { return yScale(d.I) })
+                        .attr("r", 0);
+
+                    svg3.append("text")
+                        .attr("transform",
+                            "translate(" + (width / 2) + " ," +
+                            (height + margin.top + 20) + ")")
+                        .text("Time");
+
+
+
+                    svg3.append("text")
+                        .attr("text-anchor", "start")
+                        .attr("x", -height / 2)
+                        .attr("dy", "-6em")
+                        .attr("font-size", "100%")
+                        .attr("transform", "rotate(-90)")
+                        .text("Current (A)");
+                });
+
+            }
+
+
+        </script>
+        <script>
+        var data=new Date('January 31, 2020 00:00:00')
+        var minuti= data.getMinutes()
+        var ore=data.getHours()
+        function convertIndex(x){
+            var min=x%60;
+            var hour=Math.floor(x/60);
+            data.setMinutes(min)
+            data.setHours(hour)
+            return data
+        }
+        </script>
+</body>
+
+</html>
